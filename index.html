@@ -1856,6 +1856,115 @@
       }
     }
 
+    // Load messages, gallery media from backend when receiver opens the page
+    async function loadDataFromBackend() {
+      if (!proposalId || !isBackendReady()) return;
+      try {
+        const url = new URL(APPS_SCRIPT_URL);
+        url.searchParams.set("action", "getData");
+        url.searchParams.set("id", proposalId);
+        const response = await fetch(url.toString(), { method: "GET", cache: "no-store", mode: "cors" });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (!result.success) return;
+
+        // Load deepestSorry message from backend into localStorage if not already present
+        const sorryKey = storageKey('deepestSorry_message');
+        if (result.data && result.data[sorryKey]) {
+          const localVal = localStorage.getItem(sorryKey);
+          if (!localVal || localVal !== result.data[sorryKey]) {
+            localStorage.setItem(sorryKey, result.data[sorryKey]);
+            const msgP = document.getElementById('deepestSorryMsg');
+            if (msgP) {
+              const clean = result.data[sorryKey].replace(/\n/g, '<br>');
+              msgP.innerHTML = clean + ' <span class="heart">❤</span>';
+            }
+          }
+        }
+
+        // Load proposal message from backend into localStorage if not already present
+        const proposalKey = storageKey('proposalMessage_message');
+        if (result.data && result.data[proposalKey]) {
+          const localVal = localStorage.getItem(proposalKey);
+          if (!localVal || localVal !== result.data[proposalKey]) {
+            localStorage.setItem(proposalKey, result.data[proposalKey]);
+            const msgP = document.getElementById('proposalMessageText');
+            if (msgP) {
+              msgP.innerHTML = result.data[proposalKey].replace(/\n/g, '<br>');
+            }
+          }
+        }
+
+        // Load gallery/video/audio media from backend
+        if (result.media && result.media.length > 0) {
+          const localGalleryItems = getGalleryItems();
+          const localVoiceItems = getVoiceItems();
+          let galleryChanged = false;
+          let voiceChanged = false;
+
+          for (const mediaItem of result.media) {
+            let parsedValue = mediaItem.dataValue;
+            try { parsedValue = JSON.parse(mediaItem.dataValue); } catch (e) {
+              // If not JSON, treat as plain string data
+              parsedValue = mediaItem.dataValue;
+            }
+
+            if (mediaItem.mediaType === 'audio') {
+              const exists = localVoiceItems.some(item => item.id === mediaItem.dataKey);
+              if (!exists && parsedValue) {
+                // Try to parse memory/note from the backend response
+                let notePayload = mediaItem.memory || null;
+                if (notePayload) {
+                  try { notePayload = JSON.parse(notePayload); } catch (e) { /* keep as string */ }
+                }
+                localVoiceItems.push({
+                  id: mediaItem.dataKey,
+                  audioData: parsedValue,
+                  note: notePayload,
+                  createdAt: parseInt(mediaItem.createdAt) || Date.now(),
+                  expiresAt: parseInt(mediaItem.expiresAt) || (Date.now() + GALLERY_TTL_MS)
+                });
+                voiceChanged = true;
+              }
+            } else if (mediaItem.mediaType === 'image' || mediaItem.mediaType === 'video') {
+              const exists = localGalleryItems.some(item => item.id === mediaItem.dataKey);
+              if (!exists && parsedValue) {
+                // Try to parse memory/note from the backend response
+                let memoryPayload = mediaItem.memory || null;
+                if (memoryPayload) {
+                  try { memoryPayload = JSON.parse(memoryPayload); } catch (e) { /* keep as string */ }
+                }
+                localGalleryItems.push({
+                  id: mediaItem.dataKey,
+                  mediaData: parsedValue,
+                  memory: memoryPayload,
+                  kind: mediaItem.mediaType === 'video' ? 'video' : 'image',
+                  createdAt: parseInt(mediaItem.createdAt) || Date.now(),
+                  expiresAt: parseInt(mediaItem.expiresAt) || (Date.now() + GALLERY_TTL_MS)
+                });
+                galleryChanged = true;
+              }
+            }
+          }
+
+          if (galleryChanged) {
+            saveGalleryItems(localGalleryItems);
+            if (galleryLockedContent && galleryLockedContent.style.display === 'block') {
+              await renderGalleryItems();
+            }
+          }
+          if (voiceChanged) {
+            saveVoiceItems(localVoiceItems);
+            if (galleryLockedContent && galleryLockedContent.style.display === 'block') {
+              await renderVoiceItems();
+            }
+          }
+        }
+      } catch (e) {
+        // Silently fail - data still available in localStorage
+      }
+    }
+
     function setProposalMode() {
       if (proposalId) {
         proposalSetup.style.display = "none";
@@ -1882,6 +1991,8 @@
 
     setProposalMode();
     updateGalleryAccess();
+    // Load data from backend if this is a receiver viewing a proposal link
+    loadDataFromBackend();
 
     window.addEventListener("blur", () => {
       blankGalleryForPrivacy("privacy");
@@ -1964,7 +2075,10 @@
         }
         if (galleryLockedContent) galleryLockedContent.style.display = "block";
         showGalleryMessage("Gallery unlocked. Your memories are only visible here.");
+        // Load latest data from backend so receiver sees sender's uploaded media
+        await loadDataFromBackend();
         await renderGalleryItems();
+        await renderVoiceItems();
       });
     }
 
@@ -2015,6 +2129,24 @@
         await renderGalleryItems();
         closeGalleryAfterUpload();
         showGalleryMessage("Private memories saved securely. They will auto-delete after 5 minutes.");
+
+        // Upload each new gallery item to backend so receiver can see it
+        if (proposalId && isBackendReady()) {
+          for (const item of newItems) {
+            try {
+              const url = new URL(APPS_SCRIPT_URL);
+              url.searchParams.set("action", "saveMedia");
+              url.searchParams.set("id", proposalId);
+              url.searchParams.set("dataKey", item.id);
+              url.searchParams.set("dataValue", JSON.stringify(item.mediaData));
+              url.searchParams.set("mediaType", item.kind === 'video' ? 'video' : 'image');
+              url.searchParams.set("memory", memory);
+              fetch(url.toString(), { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => { });
+            } catch (e) {
+              // Silently fail
+            }
+          }
+        }
       });
     }
 
@@ -2053,6 +2185,22 @@
           await renderVoiceItems();
           closeGalleryAfterUpload();
           showGalleryMessage("Voice message saved securely. It will delete after 5 minutes.");
+
+          // Upload encrypted audio to backend so receiver can see it
+          if (proposalId && isBackendReady()) {
+            try {
+              const url = new URL(APPS_SCRIPT_URL);
+              url.searchParams.set("action", "saveMedia");
+              url.searchParams.set("id", proposalId);
+              url.searchParams.set("dataKey", items[items.length - 1].id);
+              url.searchParams.set("dataValue", JSON.stringify(encryptedAudio));
+              url.searchParams.set("mediaType", "audio");
+              url.searchParams.set("memory", note);
+              fetch(url.toString(), { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => { });
+            } catch (e) {
+              // Silently fail
+            }
+          }
         };
         reader.readAsDataURL(file);
       });
@@ -2922,38 +3070,23 @@
 
 
 
-    // ===== Web Heart Animation (converted from heartattack/py.py) =====
-    // (Removed for lag performance)
+    // ===== Realistic Web Heart Animation =====
     (function () {
-      return;
       const wrap = document.getElementById("heartBelowGameWrap");
       const canvas = document.getElementById("heartBelowGameCanvas");
       if (!wrap || !canvas) return;
 
-
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const colors = [
-        "#ff0000",
-        "#ff1a1a",
-        "#ff3333",
-        "#ff4d4d",
-        "#ff6666",
-        "#ff8080",
-        "#ff4d4d",
-        "#ff3333",
-        "#ff1a1a",
-      ];
-
       let W = 0;
       let H = 0;
-      let dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
       function resize() {
         const rect = wrap.getBoundingClientRect();
-        W = Math.max(280, Math.floor(rect.width));
-        H = Math.max(220, Math.floor(rect.width * 0.55));
+        W = Math.max(300, Math.floor(rect.width));
+        H = Math.max(240, Math.floor(rect.width * 0.6));
         canvas.width = Math.floor(W * dpr);
         canvas.height = Math.floor(H * dpr);
         canvas.style.width = W + "px";
@@ -2964,106 +3097,264 @@
       window.addEventListener("resize", resize);
       resize();
 
-      function heart(t1) {
-        const x = 16 * Math.pow(Math.sin(t1), 3);
+      // Heart parametric equation
+      function heart(t) {
+        const x = 16 * Math.pow(Math.sin(t), 3);
         const y =
-          13 * Math.cos(t1) -
-          5 * Math.cos(2 * t1) -
-          2 * Math.cos(3 * t1) -
-          Math.cos(4 * t1);
+          13 * Math.cos(t) -
+          5 * Math.cos(2 * t) -
+          2 * Math.cos(3 * t) -
+          Math.cos(4 * t);
         return { x, y };
+      }
+
+      // Sparkle particle system
+      const particles = [];
+      const MAX_PARTICLES = 80;
+
+      class Particle {
+        constructor(cx, cy, scale, s) {
+          this.reset(cx, cy, scale, s);
+        }
+
+        reset(cx, cy, scale, s) {
+          const t = Math.random() * Math.PI * 2;
+          const h = heart(t);
+          const px = cx + h.x * scale * s;
+          const py = cy - h.y * scale * s;
+          this.x = px;
+          this.y = py;
+          this.vx = (Math.random() - 0.5) * 1.2;
+          this.vy = (Math.random() - 0.5) * 1.2 - 0.8;
+          this.life = 1;
+          this.decay = 0.004 + Math.random() * 0.012;
+          this.size = 0.8 + Math.random() * 1.8;
+          this.hue = 340 + Math.random() * 40; // pink-red range
+          this.alpha = 0.4 + Math.random() * 0.6;
+        }
+
+        update() {
+          this.x += this.vx;
+          this.y += this.vy;
+          this.vy += 0.02; // gravity
+          this.life -= this.decay;
+        }
+
+        draw(ctx) {
+          if (this.life <= 0) return;
+          ctx.globalAlpha = this.life * this.alpha;
+          ctx.fillStyle = `hsl(${this.hue}, 90%, 65%)`;
+          ctx.shadowColor = `hsl(${this.hue}, 100%, 70%)`;
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Ambient floating hearts
+      const floaters = [];
+      const MAX_FLOATERS = 18;
+
+      class Floater {
+        constructor() {
+          this.reset();
+        }
+
+        reset() {
+          this.x = Math.random() * W;
+          this.y = H + 40;
+          this.size = 8 + Math.random() * 14;
+          this.speed = 0.3 + Math.random() * 0.7;
+          this.wobble = Math.random() * Math.PI * 2;
+          this.wobbleSpeed = 0.01 + Math.random() * 0.03;
+          this.alpha = 0.15 + Math.random() * 0.35;
+          this.hue = 340 + Math.random() * 40;
+        }
+
+        update() {
+          this.y -= this.speed;
+          this.wobble += this.wobbleSpeed;
+          this.x += Math.sin(this.wobble) * 0.6;
+          if (this.y < -40) this.reset();
+        }
+
+        draw(ctx) {
+          ctx.globalAlpha = this.alpha;
+          ctx.fillStyle = `hsl(${this.hue}, 85%, 60%)`;
+          ctx.shadowColor = `hsl(${this.hue}, 100%, 70%)`;
+          ctx.shadowBlur = 12;
+          const s = this.size / 16;
+          ctx.beginPath();
+          for (let t = 0; t < Math.PI * 2; t += 0.15) {
+            const h = heart(t);
+            const px = this.x + h.x * s;
+            const py = this.y + h.y * s;
+            if (t === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      // Initialize floaters
+      for (let i = 0; i < MAX_FLOATERS; i++) {
+        const f = new Floater();
+        f.y = Math.random() * H;
+        floaters.push(f);
       }
 
       let scale = 15;
       let grow = true;
-      const N = 420; // reduced from 628 for smoother performance
+      let phase = 0;
+      const N = 380;
       let last = 0;
 
       function shouldPause() {
-        // Pause heavy redraw during lyrics overlay (big FPS saver)
         return !!document.getElementById("lyricsSweepLayer");
+      }
+
+      function drawHeartFill(ctx, cx, cy, scale, s, alpha) {
+        ctx.globalAlpha = alpha;
+        const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, scale * s * 1.2);
+        grd.addColorStop(0, "rgba(255,77,141,0.25)");
+        grd.addColorStop(0.6, "rgba(255,77,141,0.08)");
+        grd.addColorStop(1, "rgba(255,77,141,0)");
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        for (let t = 0; t < Math.PI * 2; t += 0.05) {
+          const h = heart(t);
+          const px = cx + h.x * scale * s;
+          const py = cy - h.y * scale * s;
+          if (t === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
       }
 
       function frame(ts) {
         if (!last) last = ts;
 
-        // If lyrics overlay is open, stop redrawing (requestAnimationFrame still runs)
-        if (!shouldPause() && ts - last >= 30) {
+        if (!shouldPause() && ts - last >= 20) {
           last = ts;
-
           ctx.clearRect(0, 0, W, H);
 
-          // background vignette
-          const grd = ctx.createRadialGradient(
-            W * 0.5,
-            H * 0.45,
-            20,
-            W * 0.5,
-            H * 0.45,
-            Math.max(W, H) * 0.7,
-          );
-          grd.addColorStop(0, "rgba(255,77,141,0.10)");
+          const cx = W / 2;
+          const cy = H / 2 + 8;
+          const s = Math.min(W, H) / 32;
+
+          // Smooth breathing scale using sine wave
+          phase += 0.025;
+          scale = 15 + Math.sin(phase) * 2.5;
+
+          // Background ambient glow
+          const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.65);
+          grd.addColorStop(0, "rgba(255,77,141,0.12)");
           grd.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = grd;
           ctx.fillRect(0, 0, W, H);
 
-          // scale pulse from turtle code
-          if (grow) {
-            scale += 0.25;
-            if (scale >= 18) grow = false;
-          } else {
-            scale -= 0.25;
-            if (scale <= 15) grow = true;
-          }
+          // Inner heart gradient fill
+          drawHeartFill(ctx, cx, cy, scale, s, 0.7);
 
-          const cx = W / 2;
-          const cy = H / 2 + 10;
-          const s = Math.min(W, H) / 35; // pixel scale factor
-
-          ctx.lineWidth = 2;
-          ctx.lineCap = "round";
-
-          // Glowing lines
-          for (let i = 0; i < N; i++) {
-            const a = i * 0.01;
-            const p = heart(a);
-            const x = cx + p.x * scale * s;
-            const y = cy - p.y * scale * s;
-
-            // Reduced multi-stroke glow passes (from 10 to 6)
-            for (let j = 0; j < 6; j++) {
-              ctx.strokeStyle = colors[(i + j) % colors.length];
-              ctx.shadowColor = colors[(i + j) % colors.length];
-              ctx.shadowBlur = 10;
-              ctx.beginPath();
-              ctx.moveTo(cx, cy);
-              ctx.lineTo(x, y);
-              ctx.stroke();
+          // Soft outer glow rings
+          for (let r = 3; r >= 1; r--) {
+            ctx.globalAlpha = 0.08 * r;
+            ctx.strokeStyle = `rgba(255,120,160,${0.15 + r * 0.05})`;
+            ctx.shadowColor = "rgba(255,100,150,0.4)";
+            ctx.shadowBlur = 14 + r * 6;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            for (let i = 0; i <= N; i++) {
+              const a = (i / N) * Math.PI * 2;
+              const h = heart(a);
+              const x = cx + h.x * (scale + r * 0.6) * s;
+              const y = cy - h.y * (scale + r * 0.6) * s;
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
             }
+            ctx.closePath();
+            ctx.stroke();
           }
 
-          // Outline (white)
-          ctx.shadowBlur = 0;
-          ctx.strokeStyle = "white";
-          ctx.lineWidth = 2;
+          // Main heart outline with gradient stroke
+          ctx.globalAlpha = 0.95;
+          const strokeGrd = ctx.createLinearGradient(cx - scale * s, cy, cx + scale * s, cy);
+          strokeGrd.addColorStop(0, "#ff4d6d");
+          strokeGrd.addColorStop(0.5, "#ff758f");
+          strokeGrd.addColorStop(1, "#ff4d6d");
+          ctx.strokeStyle = strokeGrd;
+          ctx.shadowColor = "#ff4d6d";
+          ctx.shadowBlur = 18;
+          ctx.lineWidth = 3;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
           ctx.beginPath();
-          for (let i = 0; i < N; i++) {
-            const a = i * 0.01;
-            const p = heart(a);
-            const x = cx + p.x * scale * s;
-            const y = cy - p.y * scale * s;
+          for (let i = 0; i <= N; i++) {
+            const a = (i / N) * Math.PI * 2;
+            const h = heart(a);
+            const x = cx + h.x * scale * s;
+            const y = cy - h.y * scale * s;
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           }
+          ctx.closePath();
           ctx.stroke();
 
-          // Text
-          ctx.fillStyle = "white";
-          ctx.shadowColor = "white";
+          // Bright inner highlight
+          ctx.globalAlpha = 0.7;
+          ctx.strokeStyle = "#fff";
+          ctx.shadowColor = "#fff";
+          ctx.shadowBlur = 10;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          for (let i = 0; i <= N; i++) {
+            const a = (i / N) * Math.PI * 2;
+            const h = heart(a);
+            const x = cx + h.x * (scale - 0.8) * s;
+            const y = cy - h.y * (scale - 0.8) * s;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+
+          // Spawn sparkle particles near heart surface
+          if (particles.length < MAX_PARTICLES && Math.random() < 0.6) {
+            const t = Math.random() * Math.PI * 2;
+            particles.push(new Particle(cx, cy, scale, s));
+          }
+
+          // Update and draw particles
+          for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update();
+            particles[i].draw(ctx);
+            if (particles[i].life <= 0) {
+              particles[i].reset(cx, cy, scale, s);
+            }
+          }
+
+          // Draw floating ambient hearts
           ctx.shadowBlur = 0;
-          ctx.font = "800 26px 'Times New Roman', serif";
+          for (const f of floaters) {
+            f.update();
+            f.draw(ctx);
+          }
+
+          // Text with soft glow
+          ctx.globalAlpha = 0.95;
+          ctx.fillStyle = "#fff";
+          ctx.shadowColor = "rgba(255,150,180,0.9)";
+          ctx.shadowBlur = 14;
+          ctx.font = "700 24px 'Times New Roman', serif";
           ctx.textAlign = "center";
-          ctx.fillText("❤ I Love You ❤", cx, cy + Math.max(H * 0.25, 20));
+          ctx.textBaseline = "middle";
+          ctx.fillText("I Love You", cx, cy + Math.max(H * 0.28, 18));
+
+          ctx.globalAlpha = 1;
+          ctx.shadowBlur = 0;
         }
 
         requestAnimationFrame(frame);
@@ -3074,7 +3365,7 @@
       canvas.style.display = "block";
       canvas.style.width = "100%";
       canvas.style.borderRadius = "18px";
-      canvas.style.background = "rgba(255,255,255,0.05)";
+      canvas.style.background = "rgba(20,5,10,0.35)";
       canvas.style.boxShadow = "0 0 22px rgba(255,255,255,0.12)";
 
       requestAnimationFrame(frame);
@@ -3230,6 +3521,9 @@
           updateControls();
           updateGalleryAccess();
           editBtn.focus();
+          // Save sender identity and message to backend so receiver can see it
+          saveMessageToBackend(storageKey('proposalMessage_sender'));
+          saveMessageToBackend(MSG_KEY);
         });
       }
 
