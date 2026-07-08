@@ -1334,7 +1334,7 @@
         <div id="galleryStatus" class="gallery-note"></div>
 
         <div id="galleryLockedContent" style="display:none;">
-          <div class="gallery-upload">
+          <div id="galleryUploadControls" class="gallery-upload">
             <input id="galleryUpload" type="file" accept="image/*,video/*" multiple>
             <textarea id="galleryMemoryTextarea" rows="3"
               placeholder="Write a private memory or note for this photo or video"></textarea>
@@ -1343,7 +1343,7 @@
           <div id="galleryGrid" class="gallery-grid"></div>
 
           <div class="voice-shell">
-            <div class="voice-card">
+            <div id="voiceUploadControls" class="voice-card">
               <input id="voiceUpload" type="file" accept="audio/*" />
               <textarea id="voiceNoteTextarea" rows="3" placeholder="Write a private voice note message"></textarea>
               <button id="saveVoiceBtn" class="green-btn glow-circling" type="button">Send Voice Message</button>
@@ -1458,12 +1458,14 @@
     const openGalleryBtn = document.getElementById("openGalleryBtn");
     const galleryStatus = document.getElementById("galleryStatus");
     const galleryLockedContent = document.getElementById("galleryLockedContent");
+    const galleryUploadControls = document.getElementById("galleryUploadControls");
     const galleryUpload = document.getElementById("galleryUpload");
     const galleryMemoryTextarea = document.getElementById("galleryMemoryTextarea");
     const saveGalleryBtn = document.getElementById("saveGalleryBtn");
     const galleryGrid = document.getElementById("galleryGrid");
     const voiceGrid = document.getElementById("voiceGrid");
     const galleryProtectionOverlay = document.getElementById("galleryProtectionOverlay");
+    const voiceUploadControls = document.getElementById("voiceUploadControls");
     const voiceUpload = document.getElementById("voiceUpload");
     const voiceNoteTextarea = document.getElementById("voiceNoteTextarea");
     const saveVoiceBtn = document.getElementById("saveVoiceBtn");
@@ -1730,17 +1732,30 @@
       return proposalId && localStorage.getItem(senderStorageKey(proposalId)) === "1";
     }
 
+    function isGallerySender() {
+      return isSenderMode
+        || localStorage.getItem("deepestSorry_sender") === "1"
+        || localStorage.getItem("proposalMessage_sender") === "1";
+    }
+
     function showGalleryMessage(message, isError = false) {
       galleryStatus.textContent = message;
       galleryStatus.style.color = isError ? '#ffd6de' : '#fff4a3';
     }
 
     function updateGalleryAccess() {
+      const showSenderControls = isGallerySender();
       if (galleryPasscodeSection) {
-        galleryPasscodeSection.style.display = isSenderMode ? 'grid' : 'none';
+        galleryPasscodeSection.style.display = showSenderControls ? 'grid' : 'none';
       }
       if (closeGalleryBtn) {
-        closeGalleryBtn.style.display = isSenderMode ? 'inline-flex' : 'none';
+        closeGalleryBtn.style.display = showSenderControls ? 'inline-flex' : 'none';
+      }
+      if (galleryUploadControls) {
+        galleryUploadControls.style.display = showSenderControls ? 'block' : 'none';
+      }
+      if (voiceUploadControls) {
+        voiceUploadControls.style.display = showSenderControls ? 'block' : 'none';
       }
     }
 
@@ -3041,6 +3056,7 @@
       claimBtn.addEventListener('click', () => {
         localStorage.setItem(SENDER_KEY, '1');
         updateControls();
+        updateGalleryAccess();
         editBtn.focus();
       });
 
@@ -3120,6 +3136,7 @@
       claimBtn.addEventListener('click', () => {
         localStorage.setItem(SENDER_KEY, '1');
         updateControls();
+        updateGalleryAccess();
         editBtn.focus();
       });
 
