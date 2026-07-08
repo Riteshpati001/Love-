@@ -1498,6 +1498,34 @@
       return APPS_SCRIPT_URL && !APPS_SCRIPT_URL.includes("PASTE_YOUR");
     }
 
+    /**
+     * Send data to the backend via HTTP POST with a form-encoded body.
+     * POST avoids the URL-length limit that breaks large payloads (photos,
+     * base64 media) and uses "no-cors" so it works from any origin without
+     * triggering a CORS preflight. This is the reliable path the receiver
+     * depends on to actually receive photos, edited messages and responses.
+     */
+    async function postToBackend(params) {
+      if (!isBackendReady()) return;
+      try {
+        const form = new URLSearchParams();
+        Object.keys(params).forEach((k) => {
+          if (params[k] !== undefined && params[k] !== null) {
+            form.set(k, String(params[k]));
+          }
+        });
+        await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          cache: "no-store",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: form.toString()
+        });
+      } catch (e) {
+        // Network-level failure only; the request may still have been delivered.
+      }
+    }
+
     function makeProposalId() {
       const randomPart = Math.random().toString(36).slice(2, 12);
       const timePart = Date.now().toString(36);
@@ -1844,56 +1872,81 @@
       if (!proposalId) return;
       const value = localStorage.getItem(key);
       if (!value) return;
-      try {
-        const url = new URL(APPS_SCRIPT_URL);
-        url.searchParams.set("action", "saveData");
-        url.searchParams.set("id", proposalId);
-        url.searchParams.set("dataKey", key);
-        url.searchParams.set("dataValue", value);
-        fetch(url.toString(), { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => { });
-      } catch (e) {
-        // Silently fail - data still available in localStorage
-      }
+      // POST (not GET) so the edited message actually reaches the receiver
+      postToBackend({
+        action: "saveData",
+        id: proposalId,
+        dataKey: key,
+        dataValue: value
+      });
     }
 
     // Load messages, gallery media from backend when receiver opens the page
+    // Uses JSONP because Google Apps Script doesn't support CORS
     async function loadDataFromBackend() {
       if (!proposalId || !isBackendReady()) return;
       try {
-        const url = new URL(APPS_SCRIPT_URL);
-        url.searchParams.set("action", "getData");
-        url.searchParams.set("id", proposalId);
-        const response = await fetch(url.toString(), { method: "GET", cache: "no-store", mode: "cors" });
-        if (!response.ok) return;
-        const result = await response.json();
-        if (!result.success) return;
-
-        // Load deepestSorry message from backend into localStorage if not already present
-        const sorryKey = storageKey('deepestSorry_message');
-        if (result.data && result.data[sorryKey]) {
-          const localVal = localStorage.getItem(sorryKey);
-          if (!localVal || localVal !== result.data[sorryKey]) {
-            localStorage.setItem(sorryKey, result.data[sorryKey]);
-            const msgP = document.getElementById('deepestSorryMsg');
-            if (msgP) {
-              const clean = result.data[sorryKey].replace(/\n/g, '<br>');
-              msgP.innerHTML = clean + ' <span class="heart">❤</span>';
+        const callbackName = 'jsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        return new Promise((resolve) => {
+          window[callbackName] = function(result) {
+            delete window[callbackName];
+            if (document.head.contains(script)) {
+              document.head.removeChild(script);
             }
+            if (!result || !result.success) {
+              resolve();
+              return;
+            }
+            processBackendData(result);
+            resolve();
+          };
+          const script = document.createElement('script');
+          const url = new URL(APPS_SCRIPT_URL);
+          url.searchParams.set("action", "getData");
+          url.searchParams.set("id", proposalId);
+          url.searchParams.set("callback", callbackName);
+          script.src = url.toString();
+          script.onerror = () => {
+            delete window[callbackName];
+            if (document.head.contains(script)) {
+              document.head.removeChild(script);
+            }
+            resolve();
+          };
+          document.head.appendChild(script);
+        });
+      } catch (e) {
+        // Silently fail
+      }
+    }
+
+    async function processBackendData(result) {
+      // Load deepestSorry message from backend into localStorage if not already present
+      const sorryKey = storageKey('deepestSorry_message');
+      if (result.data && result.data[sorryKey]) {
+        const localVal = localStorage.getItem(sorryKey);
+        if (!localVal || localVal !== result.data[sorryKey]) {
+          localStorage.setItem(sorryKey, result.data[sorryKey]);
+          const msgP = document.getElementById('deepestSorryMsg');
+          if (msgP) {
+            const clean = result.data[sorryKey].replace(/\n/g, '<br>');
+            msgP.innerHTML = clean + ' <span class="heart">❤</span>';
           }
         }
+      }
 
-        // Load proposal message from backend into localStorage if not already present
-        const proposalKey = storageKey('proposalMessage_message');
-        if (result.data && result.data[proposalKey]) {
-          const localVal = localStorage.getItem(proposalKey);
-          if (!localVal || localVal !== result.data[proposalKey]) {
-            localStorage.setItem(proposalKey, result.data[proposalKey]);
-            const msgP = document.getElementById('proposalMessageText');
-            if (msgP) {
-              msgP.innerHTML = result.data[proposalKey].replace(/\n/g, '<br>');
-            }
+      // Load proposal message from backend into localStorage if not already present
+      const proposalKey = storageKey('proposalMessage_message');
+      if (result.data && result.data[proposalKey]) {
+        const localVal = localStorage.getItem(proposalKey);
+        if (!localVal || localVal !== result.data[proposalKey]) {
+          localStorage.setItem(proposalKey, result.data[proposalKey]);
+          const msgP = document.getElementById('proposalMessageText');
+          if (msgP) {
+            msgP.innerHTML = result.data[proposalKey].replace(/\n/g, '<br>');
           }
         }
+      }
 
         // Load gallery/video/audio media from backend
         if (result.media && result.media.length > 0) {
@@ -1960,9 +2013,6 @@
             }
           }
         }
-      } catch (e) {
-        // Silently fail - data still available in localStorage
-      }
     }
 
     function setProposalMode() {
@@ -2133,18 +2183,14 @@
         // Upload each new gallery item to backend so receiver can see it
         if (proposalId && isBackendReady()) {
           for (const item of newItems) {
-            try {
-              const url = new URL(APPS_SCRIPT_URL);
-              url.searchParams.set("action", "saveMedia");
-              url.searchParams.set("id", proposalId);
-              url.searchParams.set("dataKey", item.id);
-              url.searchParams.set("dataValue", JSON.stringify(item.mediaData));
-              url.searchParams.set("mediaType", item.kind === 'video' ? 'video' : 'image');
-              url.searchParams.set("memory", memory);
-              fetch(url.toString(), { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => { });
-            } catch (e) {
-              // Silently fail
-            }
+            postToBackend({
+              action: "saveMedia",
+              id: proposalId,
+              dataKey: item.id,
+              dataValue: JSON.stringify(item.mediaData),
+              mediaType: item.kind === 'video' ? 'video' : 'image',
+              memory: item.memory
+            });
           }
         }
       });
@@ -2188,18 +2234,14 @@
 
           // Upload encrypted audio to backend so receiver can see it
           if (proposalId && isBackendReady()) {
-            try {
-              const url = new URL(APPS_SCRIPT_URL);
-              url.searchParams.set("action", "saveMedia");
-              url.searchParams.set("id", proposalId);
-              url.searchParams.set("dataKey", items[items.length - 1].id);
-              url.searchParams.set("dataValue", JSON.stringify(encryptedAudio));
-              url.searchParams.set("mediaType", "audio");
-              url.searchParams.set("memory", note);
-              fetch(url.toString(), { method: "GET", mode: "no-cors", cache: "no-store" }).catch(() => { });
-            } catch (e) {
-              // Silently fail
-            }
+            postToBackend({
+              action: "saveMedia",
+              id: proposalId,
+              dataKey: items[items.length - 1].id,
+              dataValue: JSON.stringify(encryptedAudio),
+              mediaType: "audio",
+              memory: encryptedNote
+            });
           }
         };
         reader.readAsDataURL(file);
