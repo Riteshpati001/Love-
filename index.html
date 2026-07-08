@@ -435,7 +435,8 @@
       }
     }
 
-    @media (max-width: 700px), (pointer: coarse) {
+    @media (max-width: 700px),
+    (pointer: coarse) {
       body {
         background-attachment: scroll;
       }
@@ -493,6 +494,263 @@
       justify-content: center;
     }
 
+    .celebration-layer,
+    .proposal-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10003;
+      overflow: hidden;
+    }
+
+    .heart-rain {
+      position: absolute;
+      top: -8vh;
+      font-size: 22px;
+      color: #fff;
+      text-shadow: 0 0 14px rgba(255, 77, 141, 0.9);
+      animation: heartRain 2.4s linear forwards;
+      will-change: transform, opacity;
+    }
+
+    @keyframes heartRain {
+      0% {
+        transform: translate3d(0, 0, 0) scale(0.6);
+        opacity: 0;
+      }
+
+      10% {
+        opacity: 1;
+      }
+
+      100% {
+        transform: translate3d(var(--drift, 0px), 110vh, 0) scale(1.25);
+        opacity: 0;
+      }
+    }
+
+    .firework {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--fire-color);
+      box-shadow: 0 0 14px var(--fire-color);
+      animation: fireworkBurst 1.15s ease-out forwards;
+      opacity: 0.95;
+    }
+
+    @keyframes fireworkBurst {
+      0% {
+        transform: translate(0, 0) scale(0.3);
+        opacity: 1;
+      }
+
+      100% {
+        transform: translate(var(--burst-x), var(--burst-y)) scale(0.08);
+        opacity: 0;
+      }
+    }
+
+    .proposal-scene {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(7, 10, 28, 0.28);
+      backdrop-filter: blur(5px);
+    }
+
+    .proposal-card {
+      position: relative;
+      width: min(92vw, 800px);
+      height: min(74vh, 540px);
+      border-radius: 32px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.08));
+      box-shadow: 0 0 38px rgba(255, 255, 255, 0.2);
+      overflow: hidden;
+    }
+
+    .proposal-text {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      font-size: clamp(22px, 3.2vw, 34px);
+      font-weight: 900;
+      color: white;
+      text-shadow: 0 0 20px rgba(255, 255, 255, 0.35);
+      letter-spacing: 0.02em;
+      text-align: center;
+      width: min(80vw, 620px);
+      padding: 0 10px;
+      animation: proposalTextFade 1.4s ease-out forwards;
+    }
+
+    .proposal-sparkle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
+      animation: sparkleFloat 1.4s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes sparkleFloat {
+      0% {
+        transform: translate(0, 0) scale(0.4);
+        opacity: 0;
+      }
+
+      40% {
+        opacity: 1;
+      }
+
+      100% {
+        transform: translate(var(--sx), var(--sy)) scale(1.1);
+        opacity: 0;
+      }
+    }
+
+    @keyframes proposalTextFade {
+      0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(12px);
+      }
+
+      100% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+
+    .proposal-rainbow {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, #ff5e7a, #ffca6b, #89f36a, #4dcbff, #8476ff, #ff65d9);
+      filter: blur(30px);
+      opacity: 0.65;
+      animation: rainbowShift 4s linear infinite;
+      transform: scale(1.08);
+    }
+
+    @keyframes rainbowShift {
+      0% {
+        transform: translateX(-8%) scale(1.08);
+      }
+
+      100% {
+        transform: translateX(8%) scale(1.08);
+      }
+    }
+
+    .proposal-character {
+      position: absolute;
+      bottom: 72px;
+      font-size: clamp(70px, 11vw, 120px);
+      filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
+      z-index: 2;
+      animation-duration: 2.1s;
+      animation-fill-mode: forwards;
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .proposal-boy {
+      left: -120px;
+      animation-name: walkInLeft;
+    }
+
+    .proposal-girl {
+      right: -120px;
+      animation-name: walkInRight;
+    }
+
+    .proposal-boy.kneel {
+      animation-name: kneelDown;
+      animation-duration: 1s;
+    }
+
+    .proposal-girl.kneel {
+      animation-name: girlSmile;
+      animation-duration: 1s;
+    }
+
+    @keyframes walkInLeft {
+      0% {
+        transform: translateX(-20vw) scale(0.9);
+      }
+
+      100% {
+        transform: translateX(24vw) scale(1);
+      }
+    }
+
+    @keyframes walkInRight {
+      0% {
+        transform: translateX(20vw) scale(0.9);
+      }
+
+      100% {
+        transform: translateX(-24vw) scale(1);
+      }
+    }
+
+    @keyframes kneelDown {
+      0% {
+        transform: translateX(24vw) scale(1);
+      }
+
+      100% {
+        transform: translateX(24vw) translateY(10px) rotate(-10deg) scale(1);
+      }
+    }
+
+    @keyframes girlSmile {
+      0% {
+        transform: translateX(-24vw) scale(1);
+      }
+
+      100% {
+        transform: translateX(-24vw) translateY(-6px) scale(1);
+      }
+    }
+
+    .proposal-ring {
+      position: absolute;
+      left: 50%;
+      bottom: 116px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #fff7c2, #ffd166);
+      border: 3px solid #fff;
+      box-shadow: 0 0 16px rgba(255, 209, 102, 0.9);
+      z-index: 4;
+      animation: ringFly 1.1s ease-out forwards;
+    }
+
+    @keyframes ringFly {
+      0% {
+        transform: translate(-50%, 0) scale(0.6);
+        opacity: 0;
+      }
+
+      50% {
+        opacity: 1;
+      }
+
+      100% {
+        transform: translate(-50%, -120px) scale(1);
+        opacity: 1;
+      }
+    }
+
     /* Falling hearts animation layer */
     #heartFallLayer {
       position: fixed;
@@ -545,16 +803,34 @@
 
   <div class="container">
     <div class="card circling-glow sweep" id="sorryCard">
-      <h1>My Deepest Sorry</h1>
-      <p>
-        I am truly sorry for the pain I caused you.
-        I know my words and actions may have hurt your heart, and I honestly regret that.
-        You matter to me more than I can express, and I hope you can feel the sincerity in my apology.
-        If I could take back my mistake, I would do it in a heartbeat.
-        Please give me one chance to make things better, to prove that I can love, respect, and care for you the right
-        way.
-        <span class="heart">❤</span>
-      </p>
+      <h1><i>Hey, I Want To Tell You!</i></h1>
+      <div id="deepestSorryWrap">
+        <div id="deepestSorryDisplay" aria-live="polite">
+          <!-- message text (persisted in localStorage if saved by sender) -->
+          <p id="deepestSorryMsg">
+            I am sorry for the times I failed to listen and act kindly. I want to learn and be better for you —
+            please let me show you how much I care.
+            <span class="heart">❤</span>
+          </p>
+        </div>
+
+        <div id="deepestSorryControls" style="display:flex;gap:10px;justify-content:center;margin-top:12px;">
+          <button id="claimSenderBtn" class="pink-btn" type="button" title="Claim sender on this browser">I'm the
+            sender</button>
+          <button id="editSorryBtn" class="green-btn" type="button" style="display:none;">Edit your message</button>
+        </div>
+
+        <div id="deepestSorryEditor" style="display:none; margin-top:12px; text-align:center;">
+          <textarea id="deepestSorryTextarea" rows="6"
+            style="width:100%; max-width:720px; border-radius:12px; padding:12px; font-family:inherit; font-size:1rem;">""</textarea>
+          <div
+            style="margin-top:8px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center;">
+            <button id="saveSorryBtn" class="pink-btn" type="button">Save</button>
+            <button id="cancelSorryBtn" class="red-btn" type="button"
+              style="position:static; left:auto; top:auto;">Cancel</button>
+          </div>
+        </div>
+      </div>
 
 
       <div class="buttons">
@@ -590,13 +866,32 @@
     </div>
 
     <div class="card circling-glow sweep" id="proposalCard">
-      <h2>A Small Proposal</h2>
-      <p>
-        I do not want perfect words; I only want a real chance to love you better every day.
-        If your heart is willing, I want to stay by your side through every smile, every silence, and every dream.
-        I promise to protect your peace, respect your feelings, and cherish your presence.
-        <span class="accent">Your happiness will always matter to me.</span>
-      </p>
+      <h2><i>A Small Proposal</i></h2>
+      <div id="proposalMessageWrap">
+        <p id="proposalMessageText">
+          I do not want perfect words; I only want a real chance to love you better every day.
+          If your heart is willing, I want to stay by your side through every smile, every silence, and every dream.
+          I promise to protect your peace, respect your feelings, and cherish your presence.
+          <span class="accent">Your happiness will always matter to me.</span>
+        </p>
+
+        <div id="proposalMessageControls"
+          style="display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap;">
+          <button id="claimProposalSenderBtn" class="pink-btn" type="button">I'm the sender</button>
+          <button id="editProposalBtn" class="green-btn" type="button" style="display:none;">Edit your message</button>
+        </div>
+
+        <div id="proposalMessageEditor" style="display:none; margin-top:12px; text-align:center;">
+          <textarea id="proposalMessageTextarea" rows="6"
+            style="width:100%; max-width:720px; border-radius:12px; padding:12px; font-family:inherit; font-size:1rem;"></textarea>
+          <div
+            style="margin-top:8px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:center;">
+            <button id="saveProposalBtn" class="pink-btn" type="button">Save</button>
+            <button id="cancelProposalBtn" class="red-btn" type="button"
+              style="position:static; left:auto; top:auto;">Cancel</button>
+          </div>
+        </div>
+      </div>
 
       <div id="proposalSetup" class="proposal-setup">
         <input id="senderName" type="text" placeholder="Your name">
@@ -1186,6 +1481,104 @@
       }
     }
 
+    function launchAcceptanceCelebration() {
+      const layer = document.createElement("div");
+      layer.className = "celebration-layer";
+      document.body.appendChild(layer);
+
+      for (let i = 0; i < 24; i++) {
+        const heart = document.createElement("div");
+        heart.className = "heart-rain";
+        heart.textContent = "❤";
+        heart.style.left = Math.random() * 100 + "vw";
+        heart.style.fontSize = 16 + Math.random() * 18 + "px";
+        heart.style.color = ["#ff4d8d", "#ffd1dc", "#fff0f5", "#ff86b3"][Math.floor(Math.random() * 4)];
+        heart.style.setProperty("--drift", (Math.random() * 80 - 40) + "px");
+        heart.style.animationDelay = Math.random() * 0.2 + "s";
+        layer.appendChild(heart);
+        setTimeout(() => heart.remove(), 2600);
+      }
+
+      const burstColors = ["#ff4d8d", "#ffd166", "#1dd1a1", "#48dbfb", "#ff9ff3"];
+      const burstTimes = [120, 450, 800, 1150];
+      burstTimes.forEach((delay, idx) => {
+        setTimeout(() => {
+          for (let i = 0; i < 10; i++) {
+            const spark = document.createElement("div");
+            spark.className = "firework";
+            spark.style.left = 50 + Math.random() * 20 - 10 + "%";
+            spark.style.top = 28 + Math.random() * 20 + "%";
+            spark.style.setProperty("--fire-color", burstColors[(idx + i) % burstColors.length]);
+            spark.style.setProperty("--burst-x", (Math.random() * 180 - 90) + "px");
+            spark.style.setProperty("--burst-y", (Math.random() * 180 - 90) + "px");
+            layer.appendChild(spark);
+            setTimeout(() => spark.remove(), 1200);
+          }
+        }, delay);
+      });
+
+      setTimeout(() => {
+        showProposalScene();
+      }, 1500);
+    }
+
+    function showProposalScene() {
+      const layer = document.createElement("div");
+      layer.className = "proposal-layer";
+      layer.innerHTML = `
+        <div class="proposal-scene">
+          <div class="proposal-card">
+            <div class="proposal-rainbow"></div>
+            <div class="proposal-text">Will you marry me?</div>
+            <div class="proposal-character proposal-boy">🧑‍🦱</div>
+            <div class="proposal-character proposal-girl">👩‍🦰</div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(layer);
+
+      const boy = layer.querySelector(".proposal-boy");
+      const girl = layer.querySelector(".proposal-girl");
+
+      for (let i = 0; i < 18; i++) {
+        const sparkle = document.createElement("div");
+        sparkle.className = "proposal-sparkle";
+        sparkle.style.left = 50 + Math.random() * 20 - 10 + "%";
+        sparkle.style.top = 30 + Math.random() * 30 + "%";
+        sparkle.style.setProperty("--sx", (Math.random() * 120 - 60) + "px");
+        sparkle.style.setProperty("--sy", (Math.random() * 120 - 60) + "px");
+        layer.querySelector(".proposal-card").appendChild(sparkle);
+        setTimeout(() => sparkle.remove(), 1400);
+      }
+
+      setTimeout(() => {
+        boy.classList.add("kneel");
+        girl.classList.add("kneel");
+      }, 1200);
+
+      setTimeout(() => {
+        const ring = document.createElement("div");
+        ring.className = "proposal-ring";
+        ring.textContent = "💍";
+        ring.style.fontSize = "14px";
+        ring.style.textAlign = "center";
+        ring.style.lineHeight = "18px";
+        layer.querySelector(".proposal-card").appendChild(ring);
+        setTimeout(() => {
+          ring.style.left = "calc(50% + 124px)";
+          ring.style.bottom = "120px";
+          ring.style.transform = "translate(-50%, -50%)";
+          ring.style.animation = "none";
+          ring.style.boxShadow = "0 0 20px rgba(255, 209, 102, 0.95)";
+          ring.style.transition = "all 0.45s ease";
+        }, 180);
+      }, 1900);
+
+      setTimeout(() => {
+        layer.remove();
+      }, 4800);
+    }
+
     // ---- I LOVE YOU Catch-Game (after brick win) ----
     const catchGame = {
       active: false,
@@ -1439,6 +1832,7 @@
       acceptMsg.classList.add("progress-anim");
 
       spawnFallingHearts();
+      launchAcceptanceCelebration();
     });
 
 
@@ -1640,6 +2034,157 @@
       canvas.style.boxShadow = "0 0 22px rgba(255,255,255,0.12)";
 
       requestAnimationFrame(frame);
+    })();
+
+    // --- Deepest Sorry editable message (sender-only edit) ---
+    (function () {
+      const SENDER_KEY = 'deepestSorry_sender';
+      const MSG_KEY = 'deepestSorry_message';
+      const defaultMessage = 'My heart still chooses you, even through all the silence and mistakes. I am sorry for every hurt, and I would love to love you with more patience, more care, and a gentler heart.';
+
+      const claimBtn = document.getElementById('claimSenderBtn');
+      const editBtn = document.getElementById('editSorryBtn');
+      const editorWrap = document.getElementById('deepestSorryEditor');
+      const textarea = document.getElementById('deepestSorryTextarea');
+      const saveBtn = document.getElementById('saveSorryBtn');
+      const cancelBtn = document.getElementById('cancelSorryBtn');
+      const msgP = document.getElementById('deepestSorryMsg');
+
+      function isSender() {
+        return localStorage.getItem(SENDER_KEY) === '1';
+      }
+
+      function renderMessage(text, persist = false) {
+        const clean = (text || '').trim();
+        const finalText = clean ? clean.replace(/\n/g, '<br>') : defaultMessage;
+        const withHeart = finalText + ' <span class="heart">❤</span>';
+        if (persist) {
+          localStorage.setItem(MSG_KEY, finalText);
+        }
+        msgP.innerHTML = withHeart;
+      }
+
+      function loadMessage() {
+        const storedText = localStorage.getItem(MSG_KEY);
+        if (storedText && storedText.trim()) {
+          renderMessage(storedText, false);
+        } else {
+          renderMessage(defaultMessage, true);
+        }
+      }
+
+      function updateControls() {
+        if (isSender()) {
+          editBtn.style.display = 'inline-block';
+          claimBtn.style.display = 'none';
+        } else {
+          editBtn.style.display = 'none';
+          claimBtn.style.display = 'inline-block';
+        }
+      }
+
+      claimBtn.addEventListener('click', () => {
+        localStorage.setItem(SENDER_KEY, '1');
+        updateControls();
+        editBtn.focus();
+      });
+
+      editBtn.addEventListener('click', () => {
+        if (!isSender()) return;
+        textarea.value = msgP.innerText.replace('❤', '').trim();
+        editorWrap.style.display = 'block';
+        editBtn.disabled = true;
+      });
+
+      saveBtn.addEventListener('click', () => {
+        if (!isSender()) return;
+        renderMessage(textarea.value, true);
+        editorWrap.style.display = 'none';
+        editBtn.disabled = false;
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        editorWrap.style.display = 'none';
+        editBtn.disabled = false;
+      });
+
+      loadMessage();
+      updateControls();
+    })();
+
+    // --- Proposal message editable box (sender-only edit) ---
+    (function () {
+      const SENDER_KEY = 'proposalMessage_sender';
+      const MSG_KEY = 'proposalMessage_message';
+      const defaultMessage = 'I do not want perfect words; I only want a real chance to love you better every day. If your heart is willing, I want to stay by your side through every smile, every silence, and every dream.';
+
+      const claimBtn = document.getElementById('claimProposalSenderBtn');
+      const editBtn = document.getElementById('editProposalBtn');
+      const editorWrap = document.getElementById('proposalMessageEditor');
+      const textarea = document.getElementById('proposalMessageTextarea');
+      const saveBtn = document.getElementById('saveProposalBtn');
+      const cancelBtn = document.getElementById('cancelProposalBtn');
+      const msgP = document.getElementById('proposalMessageText');
+
+      function isSender() {
+        return localStorage.getItem(SENDER_KEY) === '1';
+      }
+
+      function renderMessage(text, persist = false) {
+        const clean = (text || '').trim();
+        const finalText = clean ? clean.replace(/\n/g, '<br>') : defaultMessage;
+        if (persist) {
+          localStorage.setItem(MSG_KEY, finalText);
+        }
+        msgP.innerHTML = finalText;
+      }
+
+      function loadMessage() {
+        const storedText = localStorage.getItem(MSG_KEY);
+        if (storedText && storedText.trim()) {
+          renderMessage(storedText, false);
+        } else {
+          renderMessage(defaultMessage, true);
+        }
+      }
+
+      function updateControls() {
+        if (isSender()) {
+          editBtn.style.display = 'inline-block';
+          claimBtn.style.display = 'none';
+        } else {
+          editBtn.style.display = 'none';
+          claimBtn.style.display = 'inline-block';
+        }
+      }
+
+      claimBtn.addEventListener('click', () => {
+        localStorage.setItem(SENDER_KEY, '1');
+        updateControls();
+        editBtn.focus();
+      });
+
+      editBtn.addEventListener('click', () => {
+        if (!isSender()) return;
+        textarea.value = msgP.innerText.trim();
+        editorWrap.style.display = 'block';
+        editBtn.disabled = true;
+      });
+
+      saveBtn.addEventListener('click', () => {
+        if (!isSender()) return;
+        renderMessage(textarea.value, true);
+        editorWrap.style.display = 'none';
+        editBtn.disabled = false;
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        editorWrap.style.display = 'none';
+        editBtn.disabled = false;
+      });
+
+      loadMessage();
+      updateControls();
     })();
   </script>
 </body>
