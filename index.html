@@ -1450,6 +1450,8 @@
     const bgMusic = document.getElementById("bgMusic");
     const proposalId = new URLSearchParams(window.location.search).get("proposal") || "";
     const isSenderMode = new URLSearchParams(window.location.search).get("sender") === "1";
+    const PROPOSAL_HISTORY_KEY = "sorryWithLoveLastProposalId";
+    let latestProposalId = proposalId || localStorage.getItem(PROPOSAL_HISTORY_KEY) || "";
     const galleryPasscodeSetup = document.getElementById("galleryPasscodeSetup");
     const galleryPasscodeSection = document.getElementById("galleryPasscodeSection");
     const galleryPasscodeInput = document.getElementById("galleryPasscodeInput");
@@ -1471,11 +1473,15 @@
     const saveVoiceBtn = document.getElementById("saveVoiceBtn");
     const copyReferralBtn = document.getElementById("copyReferralBtn");
     const referralStatus = document.getElementById("referralStatus");
-    const GALLERY_SECRET_KEY = "privateGalleryPasscode";
-    const GALLERY_ITEMS_KEY = "privateGalleryItems";
-    const VOICE_ITEMS_KEY = "privateVoiceItems";
+    function storageKey(key) {
+      return latestProposalId ? `${key}_${latestProposalId}` : key;
+    }
+
+    const GALLERY_SECRET_KEY = storageKey("privateGalleryPasscode");
+    const GALLERY_ITEMS_KEY = storageKey("privateGalleryItems");
+    const VOICE_ITEMS_KEY = storageKey("privateVoiceItems");
     const GALLERY_TTL_MS = 5 * 60 * 1000;
-    const SENDER_ONLY_KEY = "privateGallerySenderOnly";
+    const SENDER_ONLY_KEY = storageKey("privateGallerySenderOnly");
     const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
 
     function isBackendReady() {
@@ -1638,11 +1644,13 @@
         return;
       }
       const visibleItems = [];
-      for (const item of items) {
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
         try {
           const mediaData = await decryptString(item.mediaData, passcode);
           const memory = item.memory ? await decryptString(item.memory, passcode) : "";
-          visibleItems.push({ mediaData, memory, kind: item.kind || 'image' });
+          const id = item.id || `${item.createdAt}-${index}`;
+          visibleItems.push({ id, mediaData, memory, kind: item.kind || 'image' });
         } catch (error) {
           // Skip unreadable item if the passcode changes or the data is invalid.
         }
@@ -1651,23 +1659,25 @@
         galleryGrid.innerHTML = '<div class="gallery-note">No private memories can be shown right now. Try again after unlocking the gallery.</div>';
         return;
       }
-      galleryGrid.innerHTML = visibleItems.map((item, index) => `
+      galleryGrid.innerHTML = visibleItems.map((item) => `
         <div class="gallery-item">
           ${item.kind === 'video'
           ? `<video controls preload="metadata" src="${item.mediaData}"></video>`
           : `<img src="${item.mediaData}" alt="private memory">`}
           <div class="caption">${(item.memory || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
           <div class="gallery-item-actions">
-            <button type="button" data-delete-gallery="${index}">Delete</button>
+            <button type="button" data-delete-gallery-id="${item.id}">Delete</button>
           </div>
         </div>
       `).join('');
-      galleryGrid.querySelectorAll('[data-delete-gallery]').forEach((button) => {
+      galleryGrid.querySelectorAll('[data-delete-gallery-id]').forEach((button) => {
         button.addEventListener('click', () => {
-          const itemIndex = Number(button.getAttribute('data-delete-gallery'));
+          const itemId = button.getAttribute('data-delete-gallery-id');
           const currentItems = getGalleryItems();
-          currentItems.splice(itemIndex, 1);
-          saveGalleryItems(currentItems);
+          saveGalleryItems(currentItems.filter((item, index) => {
+            const storedId = item.id || `${item.createdAt}-${index}`;
+            return storedId !== itemId;
+          }));
           renderGalleryItems();
         });
       });
@@ -1701,7 +1711,7 @@
       voiceGrid.innerHTML = visibleItems.map((item) => `
         <div class="gallery-item">
           <div class="voice-player">
-            <audio controls preload="auto" playsinline src="${item.audioData}"></audio>
+            <audio controls preload="auto" playsinline data-voice-id="${item.id}" src="${item.audioData}"></audio>
             <button type="button" class="voice-play-btn" data-play-voice="${item.id}">Play voice message</button>
           </div>
           <div class="caption">${(item.note || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
@@ -1713,7 +1723,7 @@
       voiceGrid.querySelectorAll('[data-play-voice]').forEach((button) => {
         button.addEventListener('click', () => {
           const voiceId = button.getAttribute('data-play-voice');
-          const audio = voiceGrid.querySelector(`audio[src="${visibleItems.find((item) => item.id === voiceId)?.audioData || ''}"]`);
+          const audio = voiceGrid.querySelector(`audio[data-voice-id="${voiceId}"]`);
           if (audio) {
             audio.play().catch(() => { });
           }
@@ -1733,9 +1743,11 @@
     }
 
     function isGallerySender() {
+      const senderProposalId = proposalId || latestProposalId;
       return isSenderMode
         || localStorage.getItem("deepestSorry_sender") === "1"
-        || localStorage.getItem("proposalMessage_sender") === "1";
+        || localStorage.getItem("proposalMessage_sender") === "1"
+        || (senderProposalId && localStorage.getItem(senderStorageKey(senderProposalId)) === "1");
     }
 
     function showGalleryMessage(message, isError = false) {
@@ -1959,6 +1971,7 @@
           const encryptedMedia = await encryptString(reader.result, passcode);
           const encryptedMemory = memory ? await encryptString(memory, passcode) : null;
           resolve({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             mediaData: encryptedMedia,
             memory: encryptedMemory,
             kind: file.type.startsWith("video/") ? "video" : "image",
@@ -2016,7 +2029,12 @@
     });
 
     copyReferralBtn.addEventListener("click", async () => {
-      const link = window.location.href.split("?")[0] + "?sender=1";
+      const proposalLinkId = proposalId || latestProposalId;
+      if (!proposalLinkId) {
+        referralStatus.textContent = "Create a proposal first before copying the link.";
+        return;
+      }
+      const link = proposalLinkFromId(proposalLinkId);
       try {
         await navigator.clipboard.writeText(link);
         referralStatus.textContent = "Proposal link copied. Share it with your loved one.";
@@ -2037,6 +2055,8 @@
         const id = makeProposalId();
         const link = proposalLinkFromId(id);
         localStorage.setItem(senderStorageKey(id), "1");
+        localStorage.setItem(PROPOSAL_HISTORY_KEY, id);
+        latestProposalId = id;
 
         await proposalRequest({
           action: "create",
