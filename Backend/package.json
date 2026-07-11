@@ -1,0 +1,9 @@
+{
+  "name": "heartlink",
+  "version": "1.0.0",
+  "description": "HeartLink - Personalized Proposal Website",
+  "scripts": {
+    "start": "cd backend && node server.js",
+    "build": "cd frontend && npm install && npm run build"
+  }
+}
