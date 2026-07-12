@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const Proposal = require('../models/Proposal');
+const Proposal = require('../models/proposal');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { upload, cloudinary } = require('../config/cloudinary');
