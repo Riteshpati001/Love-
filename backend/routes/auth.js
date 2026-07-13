@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User'); // Ensure your User model path is correct
+const User = require('../models/User'); // Correct path relative to backend/routes/auth.js
 
 // JWT Token Generator Helper Function
 const generateToken = (id) => {
