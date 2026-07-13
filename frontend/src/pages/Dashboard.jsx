@@ -109,27 +109,84 @@ const Dashboard = () => {
     setTimeout(() => setCopiedSlug(''), 2000);
   };
 
+  // =========================================================================
+  // UPDATED: direct-to-cloud upload workflow to prevent empty backend body errors
+  // =========================================================================
   const handleMediaUpload = async (e) => {
     e.preventDefault();
     if (!uploadFile || !selectedProposal) return;
     setUploading(true);
 
-    const formData = new FormData();
-    formData.append('file', uploadFile);
+    // 1. Retrieve Cloudinary variables from your env files or specify them below:
+    const CLOUD_NAME = import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME || "your_cloudinary_cloud_name"; 
+    const UPLOAD_PRESET = import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || "your_unsigned_preset_name"; 
+
+    // Safety Validation Check
+    if (CLOUD_NAME === "your_cloudinary_cloud_name" || UPLOAD_PRESET === "your_unsigned_preset_name") {
+      alert("Please configure VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET in your environment variables or Dashboard.jsx!");
+      setUploading(false);
+      return;
+    }
+
+    // 2. Identify if target is an image or video
+    const resourceType = uploadFile.type.startsWith('video') ? 'video' : 'image';
+
+    // 3. Assemble FormData payload specifically for Cloudinary direct upload
+    const cloudinaryFormData = new FormData();
+    cloudinaryFormData.append('file', uploadFile);
+    cloudinaryFormData.append('upload_preset', UPLOAD_PRESET);
 
     try {
+      console.log("Uploading directly to Cloudinary...");
+      
+      // 4. Send direct POST request to Cloudinary API
+      const cloudinaryResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`,
+        {
+          method: 'POST',
+          body: cloudinaryFormData
+        }
+      );
+
+      if (!cloudinaryResponse.ok) {
+        throw new Error(`Cloudinary upload failed: ${cloudinaryResponse.statusText}`);
+      }
+
+      const cloudinaryData = await cloudinaryResponse.json();
+      console.log("Cloudinary response data:", cloudinaryData);
+
+      // 5. Build clean JSON payload for your database
+      const backendPayload = {
+        url: cloudinaryData.secure_url,
+        publicId: cloudinaryData.public_id,
+        fileType: resourceType
+      };
+
+      console.log("Submitting metadata payload to backend...", backendPayload);
+
+      // 6. Send payload to your backend server
       const response = await apiFetch(`/api/proposals/${selectedProposal._id}/media`, {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(backendPayload)
       });
+
       const data = await response.json();
       if (data.success) {
-        setSelectedProposal({ ...selectedProposal, media: data.media });
+        // Update local React state with the returned document
+        const updatedProposal = data.data || selectedProposal;
+        setSelectedProposal(updatedProposal);
         setUploadFile(null);
         fetchProposals();
+        alert("Upload and attachment complete!");
+      } else {
+        alert(`Server association failed: ${data.message}`);
       }
     } catch (error) {
       console.error('Upload fail error:', error);
+      alert(`Upload workflow failed: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -184,7 +241,7 @@ const Dashboard = () => {
             <div className="flex justify-center py-20">
               <Loader className="animate-spin text-rose-500" size={32} />
             </div>
-          ) : !proposals || proposals.length === 0 ? ( // Guard: Checked if proposals is falsy
+          ) : !proposals || proposals.length === 0 ? ( 
             <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-rose-200">
               <p className="text-lg text-slate-500 mb-6">You have not constructed any proposal experiences yet.</p>
               <button
@@ -196,7 +253,6 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Guard: Added safe optional mapping */}
               {proposals && proposals.map((proposal) => (
                 <div
                   key={proposal._id}
