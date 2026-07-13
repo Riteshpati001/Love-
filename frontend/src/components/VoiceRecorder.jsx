@@ -54,25 +54,66 @@ const VoiceRecorder = ({ proposalId, onUploadSuccess }) => {
     setUploading(true);
     setStatus('');
 
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'voicenote.webm');
+    // 1. Retrieve Cloudinary variables
+    const CLOUD_NAME = import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME || "w2wvj1m7";
+    const UPLOAD_PRESET = import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || "ml_default";
+
+    // 2. Prepare Cloudinary FormData payload
+    // Note: Cloudinary processes raw audio files through its "video" endpoint
+    const cloudinaryFormData = new FormData();
+    cloudinaryFormData.append('file', audioBlob, 'voicenote.webm');
+    cloudinaryFormData.append('upload_preset', UPLOAD_PRESET);
 
     try {
-      const response = await apiFetch(`/api/proposals/${proposalId}/voice-note`, {
+      console.log("Uploading voice note to Cloudinary...");
+      const cloudinaryResponse = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/video/upload`,
+        {
+          method: 'POST',
+          body: cloudinaryFormData
+        }
+      );
+
+      if (!cloudinaryResponse.ok) {
+        throw new Error(`Cloudinary audio upload failed: ${cloudinaryResponse.statusText}`);
+      }
+
+      const cloudinaryData = await cloudinaryResponse.json();
+      console.log("Cloudinary audio response:", cloudinaryData);
+
+      // 3. Build payload for your backend database
+      const backendPayload = {
+        url: cloudinaryData.secure_url,
+        publicId: cloudinaryData.public_id,
+        fileType: 'audio' // Keep the type as audio for frontend rendering
+      };
+
+      console.log("Submitting voice note payload to database...", backendPayload);
+
+      // 4. Send metadata to your existing working media route
+      const response = await apiFetch(`/api/proposals/${proposalId}/media`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(backendPayload)
       });
+
       const data = await response.json();
       if (data.success) {
-        setStatus('Voice note uploaded directly to AWS S3 successfully!');
+        setStatus('Voice note uploaded directly to Cloudinary successfully!');
         setAudioBlob(null);
         setAudioUrl('');
-        onUploadSuccess(data.media);
+
+        // Extract the updated media array safely using fallbacks
+        const updatedProposal = data.data || {};
+        const updatedMedia = updatedProposal.media || data.media || [];
+        onUploadSuccess(updatedMedia);
       } else {
         setStatus(data.message || 'Error occurred while saving voice note.');
       }
     } catch (error) {
-      console.error('AWS S3 voice note sync failed:', error);
+      console.error('Cloudinary voice note sync failed:', error);
       setStatus('Connection or storage configuration error.');
     } finally {
       setUploading(false);
@@ -122,7 +163,7 @@ const VoiceRecorder = ({ proposalId, onUploadSuccess }) => {
           >
             {uploading ? (
               <>
-                <Loader className="animate-spin" size={14} /> Uploading directly to AWS S3...
+                <Loader className="animate-spin" size={14} /> Uploading directly to Cloudinary...
               </>
             ) : (
               'Save & Attach Voice Note'
