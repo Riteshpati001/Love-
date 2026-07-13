@@ -8,6 +8,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
+  // We keep fetchUser as is for now
   useEffect(() => {
     const fetchUser = async () => {
       if (!token) {
@@ -33,10 +34,11 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = async (email, password) => {
-    const response = await apiFetch('/api/auth/login', {
+    // Standard direct fetch to bypass apiFetch limitations
+    const response = await fetch('https://love-x9y7.onrender.com/api/auth/login', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json', // Added so backend parses email/password
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
     });
@@ -50,10 +52,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (name, email, password) => {
-    const response = await apiFetch('/api/auth/register', {
+    // Standard direct fetch to bypass apiFetch limitations
+    const response = await fetch('https://love-x9y7.onrender.com/api/auth/register', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json', // Added so backend parses name/email/password
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ name, email, password }),
     });
