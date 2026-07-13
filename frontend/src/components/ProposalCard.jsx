@@ -60,8 +60,9 @@ const ProposalCard = ({ receiverName, proposalMessage, onAccept, onReject }) => 
           💝
         </div>
 
+        {/* Displaying receiverName if it is passed down */}
         <h2 className="text-3xl md:text-4xl font-bold text-rose-700 mb-6 script-font">
-          My Sweetest Proposal
+          {receiverName ? `For My Sweetest ${receiverName}` : 'My Sweetest Proposal'}
         </h2>
 
         <p className="text-lg text-slate-700 leading-relaxed mb-10 italic">
