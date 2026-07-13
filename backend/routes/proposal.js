@@ -100,17 +100,28 @@ router.delete('/:id', async (req, res, next) => {
 // ==========================================
 router.post('/:id/media', async (req, res, next) => {
   try {
-    const { url, publicId, fileType } = req.body;
+    // 1. Helper logs to trace incoming payloads in your Render Console
+    console.log("=== INCOMING MEDIA REQUEST ===");
+    console.log("Proposal ID:", req.params.id);
+    console.log("Content-Type Header:", req.headers['content-type']);
+    console.log("Request Body:", req.body);
+    console.log("===============================");
 
-    // 1. Basic validation of incoming metadata
+    // 2. Extract values flexibly from camelCase or Cloudinary's default snake_case responses
+    const url = req.body.url || req.body.secure_url;
+    const publicId = req.body.publicId || req.body.public_id;
+    const fileType = req.body.fileType || req.body.file_type || req.body.resource_type;
+
+    // 3. Validation fallback with debug context
     if (!url || !publicId || !fileType) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: url, publicId, or fileType'
+        message: 'Missing required fields. The backend expects url (or secure_url), publicId (or public_id), and fileType (or resource_type).',
+        receivedBody: req.body
       });
     }
 
-    // 2. Find the target proposal
+    // 4. Locate target proposal
     const proposal = await Proposal.findById(req.params.id);
 
     if (!proposal) {
@@ -120,8 +131,7 @@ router.post('/:id/media', async (req, res, next) => {
       });
     }
 
-    // 3. Add the new media object to the proposal's media array
-    // (uploadedAt property is included to support your hourly cleanup task in server.js)
+    // 5. Append new media metadata to the array
     proposal.media.push({
       url,
       publicId,
@@ -129,7 +139,7 @@ router.post('/:id/media', async (req, res, next) => {
       uploadedAt: new Date()
     });
 
-    // 4. Save the updated proposal document to MongoDB
+    // 6. Persist changes in MongoDB
     await proposal.save();
 
     res.status(200).json({
