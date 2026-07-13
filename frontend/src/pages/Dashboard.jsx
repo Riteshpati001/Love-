@@ -6,6 +6,7 @@ import VoiceRecorder from '../components/VoiceRecorder';
 
 const Dashboard = () => {
   const { logout, user } = useContext(AuthContext);
+  // Ensure we default to an empty array
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [copiedSlug, setCopiedSlug] = useState('');
@@ -28,9 +29,12 @@ const Dashboard = () => {
       const response = await apiFetch('/api/proposals');
       const data = await response.json();
       if (data.success) {
-        setProposals(data.proposals);
+        // Safe Fallback: If 'data.proposals' is undefined or null, fallback to an empty array []
+        const fetchedProposals = data.proposals || [];
+        setProposals(fetchedProposals);
+        
         if (selectedProposal) {
-          const updated = data.proposals.find(p => p._id === selectedProposal._id);
+          const updated = fetchedProposals.find(p => p._id === selectedProposal._id);
           if (updated) setSelectedProposal(updated);
         }
       }
@@ -180,7 +184,7 @@ const Dashboard = () => {
             <div className="flex justify-center py-20">
               <Loader className="animate-spin text-rose-500" size={32} />
             </div>
-          ) : proposals.length === 0 ? (
+          ) : !proposals || proposals.length === 0 ? ( // Guard: Checked if proposals is falsy
             <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-rose-200">
               <p className="text-lg text-slate-500 mb-6">You have not constructed any proposal experiences yet.</p>
               <button
@@ -192,7 +196,8 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {proposals.map((proposal) => (
+              {/* Guard: Added safe optional mapping */}
+              {proposals && proposals.map((proposal) => (
                 <div
                   key={proposal._id}
                   className={`bg-white rounded-2xl p-6 border transition-all ${
@@ -223,7 +228,9 @@ const Dashboard = () => {
                     </div>
                     <div>
                       <div className="text-xs text-slate-500">Key Created</div>
-                      <div className="text-base font-bold text-slate-700">{new Date(proposal.createdAt).toLocaleDateString()}</div>
+                      <div className="text-base font-bold text-slate-700">
+                        {proposal.createdAt ? new Date(proposal.createdAt).toLocaleDateString() : 'N/A'}
+                      </div>
                     </div>
                   </div>
 
@@ -280,7 +287,7 @@ const Dashboard = () => {
               <VoiceRecorder
                 proposalId={selectedProposal._id}
                 onUploadSuccess={(updatedMedia) => {
-                  setSelectedProposal({ ...selectedProposal, media: updatedMedia });
+                  setSelectedProposal({ ...selectedProposal, media: updatedMedia || [] });
                   fetchProposals();
                 }}
               />
@@ -291,7 +298,7 @@ const Dashboard = () => {
                   type="file"
                   required
                   accept="image/*,video/*"
-                  onChange={(e) => setUploadFile(e.target.files[0])}
+                  onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
                   className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100"
                 />
                 <button
