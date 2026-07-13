@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose'); // Imported mongoose for ObjectId checking
 const Proposal = require('../models/Proposal'); 
 
 // Import your S3 and Cloudinary configurations for media cleanup
@@ -27,6 +28,77 @@ router.post('/', async (req, res, next) => {
     res.status(201).json({
       success: true,
       data: newProposal
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==========================================
+// ADDED ROUTE - GET: Retrieve a proposal by slug OR database ID
+// ==========================================
+router.get('/slug/:slug', async (req, res, next) => {
+  try {
+    const { slug } = req.params;
+
+    // Check if the 'slug' parameter is actually a valid 24-character hex database ID
+    const query = mongoose.Types.ObjectId.isValid(slug)
+      ? { _id: slug } // If it is, look up by _id
+      : { slug: slug }; // Otherwise, look up by slug string
+
+    const proposal = await Proposal.findOne(query);
+
+    if (!proposal) {
+      return res.status(404).json({
+        success: false,
+        message: 'Proposal not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      proposal // ProposalView.jsx expects a 'proposal' field inside data
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==========================================
+// ADDED ROUTE - POST: Respond to a proposal (accept/reject) by slug OR ID
+// ==========================================
+router.post('/slug/:slug/respond', async (req, res, next) => {
+  try {
+    const { slug } = req.params;
+    const { response } = req.body; // Expects 'accepted' or 'rejected'
+
+    if (!['accepted', 'rejected'].includes(response)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid response. Must be "accepted" or "rejected".'
+      });
+    }
+
+    const query = mongoose.Types.ObjectId.isValid(slug)
+      ? { _id: slug }
+      : { slug: slug };
+
+    const proposal = await Proposal.findOneAndUpdate(
+      query,
+      { status: response },
+      { new: true } // Return the updated document
+    );
+
+    if (!proposal) {
+      return res.status(404).json({
+        success: false,
+        message: 'Proposal not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: proposal
     });
   } catch (error) {
     next(error);
