@@ -118,8 +118,8 @@ const Dashboard = () => {
     setUploading(true);
 
     // 1. Retrieve Cloudinary variables from your env files or specify them below:
-    const CLOUD_NAME = import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME || "your_cloudinary_cloud_name"; 
-    const UPLOAD_PRESET = import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || "your_unsigned_preset_name"; 
+    const CLOUD_NAME = import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME || "w2wvj1m7"; 
+    const UPLOAD_PRESET = import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET || "ml_default"; 
 
     // Safety Validation Check
     if (CLOUD_NAME === "your_cloudinary_cloud_name" || UPLOAD_PRESET === "your_unsigned_preset_name") {
