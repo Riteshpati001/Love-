@@ -43,9 +43,13 @@ const protect = async (req, res, next) => {
 // ==========================================
 router.post('/register', async (req, res, next) => {
   try {
-    const { email, password, username } = req.body;
+    // Destructure both 'username' and 'name' to accommodate the frontend payload keys
+    const { email, password, username, name } = req.body;
 
-    if (!email || !password || !username) {
+    // Fall back to 'name' if the frontend did not send 'username'
+    const finalUsername = username || name;
+
+    if (!email || !password || !finalUsername) {
       return res.status(400).json({ success: false, message: 'Please enter all fields' });
     }
 
@@ -61,7 +65,7 @@ router.post('/register', async (req, res, next) => {
 
     // Create user in MongoDB
     const user = await User.create({
-      username,
+      username: finalUsername,
       email,
       password: hashedPassword,
     });
