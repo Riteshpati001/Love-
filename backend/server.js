@@ -7,6 +7,12 @@ const mongoose = require('mongoose');
 
 const connectDB = async () => {
   try {
+    // Print all environment keys to see what Render is actually sending to the server
+    console.log("=== Environment Variables Debug ===");
+    console.log("Detected Env Keys:", Object.keys(process.env));
+    console.log("Value of MONGO_URI exists?", !!process.env.MONGO_URI);
+    console.log("====================================");
+
     const conn = await mongoose.connect(process.env.MONGO_URI);
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
