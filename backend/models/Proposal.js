@@ -16,7 +16,7 @@ const connectDB = async () => {
 };
 
 const { uploadVoiceToS3, deleteVoiceFromS3 } = require('../config/s3');
-const { cloudinary } = require('./config/cloudinary');
+const cloudinary = require('../config/cloudinary');
 const Proposal = require('./models/Proposal'); // Updated to capital 'P' to match your Linux file system
 
 const app = express();
