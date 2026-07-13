@@ -151,4 +151,55 @@ router.post('/:id/media', async (req, res, next) => {
   }
 });
 
+// ==========================================
+// NEW ROUTE - DELETE: Remove an individual media item from a proposal & S3/Cloudinary
+// ==========================================
+router.delete('/:id/media/:mediaId', async (req, res, next) => {
+  try {
+    const proposal = await Proposal.findById(req.params.id);
+
+    if (!proposal) {
+      return res.status(404).json({
+        success: false,
+        message: 'Proposal not found'
+      });
+    }
+
+    // Find the specific media item inside the proposal's media sub-document array
+    const mediaItem = proposal.media.id(req.params.mediaId);
+
+    if (!mediaItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Media item not found'
+      });
+    }
+
+    // Clean up the storage resource from the cloud
+    try {
+      if (mediaItem.fileType === 'audio') {
+        await deleteVoiceFromS3(mediaItem.publicId);
+      } else {
+        let resourceType = 'image';
+        if (mediaItem.fileType === 'video') resourceType = 'video';
+        await cloudinary.uploader.destroy(mediaItem.publicId, { resource_type: resourceType });
+      }
+    } catch (mediaError) {
+      console.error(`Storage deletion failed for ${mediaItem.publicId}:`, mediaError.message);
+    }
+
+    // Remove from MongoDB array
+    proposal.media.pull(req.params.mediaId);
+    await proposal.save();
+
+    res.status(200).json({
+      success: true,
+      data: proposal,
+      media: proposal.media // Return updated media list to keep frontend in sync
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
