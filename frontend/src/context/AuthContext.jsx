@@ -35,6 +35,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const response = await apiFetch('/api/auth/login', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', // Added so backend parses email/password
+      },
       body: JSON.stringify({ email, password }),
     });
     const data = await response.json();
@@ -49,6 +52,9 @@ export const AuthProvider = ({ children }) => {
   const register = async (name, email, password) => {
     const response = await apiFetch('/api/auth/register', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', // Added so backend parses name/email/password
+      },
       body: JSON.stringify({ name, email, password }),
     });
     const data = await response.json();
