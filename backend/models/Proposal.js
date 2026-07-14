@@ -8,7 +8,25 @@ const mediaSchema = new mongoose.Schema({
 });
 
 const proposalSchema = new mongoose.Schema({
-  // Add other fields your proposal might have here (like title, description, user, etc.)
+  sender: { 
+    type: String, 
+    required: true 
+  },
+  receiver: { 
+    type: String, 
+    required: true 
+  },
+  status: { 
+    type: String, 
+    default: 'pending', // 👈 This ensures every new proposal starts as 'pending'
+    enum: ['pending', 'accepted', 'rejected'] // Restricts the field to these 3 values
+  },
+  title: { 
+    type: String 
+  },
+  description: { 
+    type: String 
+  },
   media: [mediaSchema]
 }, { timestamps: true });
 
