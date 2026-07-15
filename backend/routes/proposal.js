@@ -2,15 +2,17 @@ const express = require('express');
 const router = express.Router();
 const Proposal = require('../models/Proposal'); // Adjust path to your model if needed
 
+// Import S3 and Cloudinary configs for media cleanup upon deletion
+const { deleteVoiceFromS3 } = require('../config/s3');
+const { cloudinary } = require('../config/cloudinary');
+
 // --- 1. GET ROUTE HANDLER (Fetch all proposals) ---
 const getProposals = async (req, res) => {
   try {
     // Fetch proposals from the database, sorting them by newest first
     const proposals = await Proposal.find().sort({ createdAt: -1 });
     
-    // NOTE: Depending on how your frontend state is set up, it might expect the raw array directly.
-    // If you run into another syntax/mapping error, try changing the line below to:
-    // res.status(200).json(proposals);
+    // Send them back as JSON.
     res.status(200).json({
       success: true,
       data: proposals
@@ -26,7 +28,6 @@ const getProposals = async (req, res) => {
 // --- 2. POST ROUTE HANDLER (Create a proposal) ---
 const createProposal = async (req, res) => {
   try {
-    // Destructure the new fields exactly as they are sent from the frontend payload
     const { 
       receiverEmail, 
       receiverName, 
@@ -34,12 +35,11 @@ const createProposal = async (req, res) => {
       proposalMessage, 
       galleryPassword, 
       musicUrl,
-      sender // Usually passed from authenticated user, or frontend if included
+      sender 
     } = req.body;
 
-    // Create the proposal using the new schema structure
     const newProposal = new Proposal({
-      sender: sender || req.user?.email || "Anonymous", // Fallback if sender is handled differently
+      sender: sender || req.user?.email || "Anonymous", 
       receiverEmail,
       receiverName,
       introMessage,
@@ -48,7 +48,6 @@ const createProposal = async (req, res) => {
       musicUrl
     });
 
-    // Save to database
     await newProposal.save();
 
     res.status(201).json({ 
@@ -65,13 +64,61 @@ const createProposal = async (req, res) => {
   }
 };
 
+// --- 3. DELETE ROUTE HANDLER (Delete a proposal and its media) ---
+const deleteProposal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Find the proposal first to inspect its media for deletion
+    const proposal = await Proposal.findById(id);
+    
+    if (!proposal) {
+      return res.status(404).json({ success: false, message: "Proposal not found" });
+    }
+
+    // Clean up S3 and Cloudinary files to avoid leaving orphaned media
+    if (proposal.media && proposal.media.length > 0) {
+      for (const item of proposal.media) {
+        try {
+          if (item.fileType === 'audio') {
+            await deleteVoiceFromS3(item.publicId);
+          } else {
+            let resourceType = 'image';
+            if (item.fileType === 'video') resourceType = 'video';
+            await cloudinary.uploader.destroy(item.publicId, { resource_type: resourceType });
+          }
+        } catch (mediaError) {
+          console.error(`Failed to delete media asset ${item.publicId}:`, mediaError.message);
+          // Safe catch: Don't let a media cleanup failure block database deletion
+        }
+      }
+    }
+
+    // Delete the proposal document from MongoDB
+    await Proposal.findByIdAndDelete(id);
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Proposal and associated media deleted successfully" 
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};
+
 // --- ROUTE DEFINITIONS ---
 
-// GET /api/proposals - Handles fetching proposals (Fixes the 404 error)
+// GET /api/proposals - Handles fetching proposals
 router.get('/', getProposals);
 
 // POST /api/proposals - Handles creating proposals
 router.post('/', createProposal);
+
+// DELETE /api/proposals/:id - Handles deleting a proposal (Fixes the new 404 error)
+router.delete('/:id', deleteProposal);
 
 // --- EXPORT THE ROUTER ---
 module.exports = router;
