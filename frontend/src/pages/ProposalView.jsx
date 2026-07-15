@@ -22,8 +22,9 @@ const ProposalView = () => {
       const response = await apiFetch(`/api/proposals/slug/${slug}`);
       const data = await response.json();
       if (data.success) {
-        setProposal(data.proposal);
-        if (data.proposal.status !== 'pending') {
+        // Changed data.proposal to data.data to match your API response
+        setProposal(data.data);
+        if (data.data.status !== 'pending') {
           setStep(6);
         }
       } else {
