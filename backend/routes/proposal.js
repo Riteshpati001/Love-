@@ -1,6 +1,8 @@
+const express = require('express');
+const router = express.Router();
 const Proposal = require('../models/Proposal'); // Adjust path to your model if needed
 
-// Your API route for handling POST /api/proposals
+// Your API route logic for handling POST /api/proposals
 const createProposal = async (req, res) => {
   try {
     // 1. Destructure the new fields exactly as they are sent from the frontend payload
@@ -41,3 +43,14 @@ const createProposal = async (req, res) => {
     });
   }
 };
+
+// --- ROUTE DEFINITIONS ---
+
+// This maps to: POST /api/proposals/
+router.post('/', createProposal);
+
+// If you need to add more routes later (like fetching a proposal), you can define them here:
+// router.get('/:id', getProposalById);
+
+// --- EXPORT THE ROUTER ---
+module.exports = router;
