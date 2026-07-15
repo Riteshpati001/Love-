@@ -22,20 +22,31 @@ const getProposals = async (req, res) => {
   }
 };
 
-// --- 2. GET ROUTE HANDLER (Fetch a single proposal by ID for receiver view) ---
+// --- 2. GET ROUTE HANDLER (Fetch a single proposal by ID or Slug) ---
 const getProposalById = async (req, res) => {
   try {
     const { id } = req.params;
-    const proposal = await Proposal.findById(id);
+    let proposal;
+
+    // Check if the 'id' parameter is a valid 24-character MongoDB ObjectId
+    const mongoose = require('mongoose');
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      proposal = await Proposal.findById(id);
+    }
+
+    // Fallback: If not found by ID, try searching by a custom 'slug' field in MongoDB
+    if (!proposal) {
+      proposal = await Proposal.findOne({ slug: id });
+    }
 
     if (!proposal) {
       return res.status(404).json({ success: false, message: "Proposal not found" });
     }
 
     // NOTE: Depending on your frontend setup, it might expect the raw proposal object directly.
-    // If the page loads but data doesn't map, try changing the res.status line below to:
-    // res.status(200).json(proposal);
-    res.status(200).json({
+    // If the page loads but text doesn't show, try changing the line below to:
+    // return res.status(200).json(proposal);
+    return res.status(200).json({
       success: true,
       data: proposal
     });
@@ -171,7 +182,10 @@ const addMediaToProposal = async (req, res) => {
 // GET /api/proposals - Fetch all proposals
 router.get('/', getProposals);
 
-// GET /api/proposals/:id - Fetch a single proposal (Fixes the "Experience Offline" error)
+// GET /api/proposals/slug/:id - Fetch by slug or ID (Fixes the new "slug" 404 error!)
+router.get('/slug/:id', getProposalById);
+
+// GET /api/proposals/:id - Fallback to fetch directly by ID
 router.get('/:id', getProposalById);
 
 // POST /api/proposals - Create a proposal
