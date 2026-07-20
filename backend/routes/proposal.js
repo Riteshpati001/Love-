@@ -2,6 +2,7 @@ const express = require('express');
 const router = require('express').Router();
 const nodemailer = require('nodemailer'); // Import nodemailer
 const jwt = require('jsonwebtoken'); // Import jsonwebtoken to verify tokens
+const mongoose = require('mongoose'); // Import mongoose for dynamic model lookups
 const Proposal = require('../models/Proposal'); // Adjust path to your model if needed
 
 // Import S3 and Cloudinary configs for media cleanup upon deletion
@@ -17,44 +18,72 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// --- Authentication Middleware (Supports both Sessions and JWT) ---
+// --- Dynamic User Email Resolver ---
+// This helper retrieves the email from the token payload, or queries the database 
+// dynamically if the token only contains a user ID.
+const resolveUserEmail = async (req) => {
+  if (!req.user) return null;
+  
+  // 1. Check if email is directly in req.user
+  if (req.user.email) return req.user.email;
+  if (req.user.user?.email) return req.user.user.email;
+  
+  // 2. If only an ID is present, fetch the email from the database dynamically
+  const userId = req.user.id || req.user._id || req.user.userId || req.user.user?.id || req.user.user?._id;
+  if (userId) {
+    try {
+      // Find any registered User or Creator model dynamically from Mongoose
+      const UserModel = mongoose.models.User || mongoose.models.Creator || mongoose.models.Account;
+      if (UserModel) {
+        const user = await UserModel.findById(userId);
+        if (user && user.email) {
+          return user.email;
+        }
+      }
+    } catch (err) {
+      console.error("Dynamic user email lookup failed:", err.message);
+    }
+  }
+  
+  return null;
+};
+
+// --- Authentication Middleware ---
 const protect = (req, res, next) => {
   try {
-    // 1. SESSION FALLBACK: If a global session middleware (like Passport or express-session) 
-    // has already authenticated the user and populated req.user, let them pass!
-    if (req.user && req.user.email) {
+    // 1. SESSION FALLBACK: If global session middleware (Passport/express-session) is active
+    if (req.user) {
       return next();
     }
 
     let token;
 
-    // 2. JWT HEADER CHECK: Check for token in Authorization Header (Bearer <token>)
+    // 2. JWT HEADER CHECK: (Bearer <token>)
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
-    // 3. JWT COOKIE CHECK: Check for token in cookies as a fallback
+    // 3. JWT COOKIE CHECK:
     else if (req.cookies && req.cookies.token) {
       token = req.cookies.token;
     }
 
-    // If no session exists and no token is found, deny access
     if (!token) {
       return res.status(401).json({ 
         success: false, 
-        message: "Unauthorized: No active user session found" 
+        message: "Unauthorized: Access token or session cookie is missing" 
       });
     }
 
     // Verify token using the secret key in your .env file
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Attach decoded token data (which should contain user email) to req.user
+    // Attach decoded token data to req.user
     req.user = decoded; 
     next();
   } catch (error) {
     return res.status(401).json({ 
       success: false, 
-      message: "Unauthorized: Session is invalid or expired" 
+      message: "Unauthorized: Session token is invalid or expired" 
     });
   }
 };
@@ -62,12 +91,13 @@ const protect = (req, res, next) => {
 // --- 1. GET ROUTE HANDLER (Fetch proposals for the logged-in user) ---
 const getProposals = async (req, res) => {
   try {
-    const userEmail = req.user?.email;
+    // Dynamically resolve the logged-in user's email
+    const userEmail = await resolveUserEmail(req);
 
     if (!userEmail) {
       return res.status(401).json({ 
         success: false, 
-        message: "Unauthorized: No active user session found" 
+        message: "Unauthorized: Could not resolve user email from active session" 
       });
     }
 
@@ -91,7 +121,6 @@ const getProposalById = async (req, res) => {
     const { id } = req.params;
     let proposal;
 
-    const mongoose = require('mongoose');
     if (mongoose.Types.ObjectId.isValid(id)) {
       proposal = await Proposal.findById(id);
     }
@@ -129,8 +158,10 @@ const createProposal = async (req, res) => {
       sender 
     } = req.body;
 
+    const userEmail = await resolveUserEmail(req);
+
     const newProposal = new Proposal({
-      sender: sender || req.user?.email || "Anonymous", 
+      sender: sender || userEmail || "Anonymous", 
       receiverEmail,
       receiverName,
       introMessage,
@@ -242,7 +273,6 @@ const unlockGallery = async (req, res) => {
     const { password } = req.body;
 
     let proposal;
-    const mongoose = require('mongoose');
     if (mongoose.Types.ObjectId.isValid(id)) {
       proposal = await Proposal.findById(id);
     }
@@ -268,14 +298,13 @@ const unlockGallery = async (req, res) => {
 const respondToProposal = async (req, res) => {
   try {
     const { id } = req.params;
-    const { response } = req.body; // 'accepted' or 'rejected'
+    const { response } = req.body; 
 
     if (!response || !['accepted', 'rejected'].includes(response)) {
       return res.status(400).json({ success: false, message: "Invalid response status" });
     }
 
     let proposal;
-    const mongoose = require('mongoose');
     if (mongoose.Types.ObjectId.isValid(id)) {
       proposal = await Proposal.findById(id);
     }
