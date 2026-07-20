@@ -1,15 +1,25 @@
 const express = require('express');
 const router = express.Router();
+const nodemailer = require('nodemailer'); // Import nodemailer
 const Proposal = require('../models/Proposal'); // Adjust path to your model if needed
 
 // Import S3 and Cloudinary configs for media cleanup upon deletion
 const { deleteVoiceFromS3 } = require('../config/s3');
 const { cloudinary } = require('../config/cloudinary');
 
+// --- Nodemailer Transporter Configuration ---
+// This uses Gmail as a default. You can adjust it to SendGrid, Mailgun, etc.
+const transporter = nodemailer.createTransport({
+  service: 'gmail', 
+  auth: {
+    user: process.env.EMAIL_USER, // Your Gmail address
+    pass: process.env.EMAIL_PASS  // Your Google App Password
+  }
+});
+
 // --- 1. GET ROUTE HANDLER (Fetch proposals for the logged-in user) ---
 const getProposals = async (req, res) => {
   try {
-    // Retrieve the logged-in user's email (populated by authentication middleware)
     const userEmail = req.user?.email;
 
     if (!userEmail) {
@@ -19,7 +29,6 @@ const getProposals = async (req, res) => {
       });
     }
 
-    // Filter by 'sender' so users only see their own proposals
     const proposals = await Proposal.find({ sender: userEmail }).sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -40,13 +49,11 @@ const getProposalById = async (req, res) => {
     const { id } = req.params;
     let proposal;
 
-    // Check if the 'id' parameter is a valid 24-character MongoDB ObjectId
     const mongoose = require('mongoose');
     if (mongoose.Types.ObjectId.isValid(id)) {
       proposal = await Proposal.findById(id);
     }
 
-    // Fallback: If not found by ID, try searching by a custom 'slug' field in MongoDB
     if (!proposal) {
       proposal = await Proposal.findOne({ slug: id });
     }
@@ -205,7 +212,6 @@ const unlockGallery = async (req, res) => {
       return res.status(404).json({ success: false, message: "Proposal not found" });
     }
 
-    // Direct string comparison for plaintext passwords (matching frontend database response)
     if (proposal.galleryPassword === password) {
       return res.status(200).json({ success: true, message: "Gallery unlocked successfully" });
     } else {
@@ -242,6 +248,48 @@ const respondToProposal = async (req, res) => {
     proposal.status = response;
     await proposal.save();
 
+    // --- SEND NOTIFICATION EMAIL TO SENDER ---
+    // Check if the sender is a valid email address and not "Anonymous"
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (proposal.sender && emailRegex.test(proposal.sender)) {
+      
+      const emailSubject = response === 'accepted' 
+        ? `💖 Great news! Your proposal to ${proposal.receiverName} was accepted!` 
+        : `💌 Update on your proposal to ${proposal.receiverName}`;
+
+      const emailHtml = `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
+          <h2 style="color: #d63384; text-align: center;">HeartLink Update</h2>
+          <p>Hello,</p>
+          <p>We are writing to let you know that <strong>${proposal.receiverName}</strong> has responded to your proposal.</p>
+          
+          <div style="background-color: #f8f9fa; border-left: 4px solid #d63384; padding: 15px; margin: 20px 0; border-radius: 4px; text-align: center;">
+            <p style="font-size: 1.2rem; margin: 0;">Status: <strong style="color: ${response === 'accepted' ? '#198754' : '#dc3545'}; text-transform: uppercase;">${response}</strong></p>
+          </div>
+          
+          <p>You can check the dashboard to manage your proposals.</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+          <p style="font-size: 0.8rem; color: #888; text-align: center;">This is an automated notification from HeartLink.</p>
+        </div>
+      `;
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: proposal.sender,
+        subject: emailSubject,
+        html: emailHtml
+      };
+
+      // Send the email asynchronously so we do not slow down the server response
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.error("Failed to send email to sender:", error.message);
+        } else {
+          console.log("Response notification email sent to sender:", proposal.sender);
+        }
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: `Proposal response updated to: ${response}`,
@@ -256,8 +304,6 @@ const respondToProposal = async (req, res) => {
 // --- ROUTE DEFINITIONS ---
 
 // GET /api/proposals - Fetch all proposals for the logged-in user
-// Note: If auth middleware is not applied globally in your server.js/app.js file, 
-// make sure to import and inject it here (e.g., router.get('/', authMiddleware, getProposals))
 router.get('/', getProposals);
 
 // GET /api/proposals/slug/:id - Fetch by slug or ID
